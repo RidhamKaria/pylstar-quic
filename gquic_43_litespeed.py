@@ -4,7 +4,6 @@ import json
 import random
 from collections import Counter
 from statistics import median, mean
-from Crypto.Cipher import AES
 
 from peewee import OperationalError
 from scapy import route # DO NOT REMOVE!!
@@ -20,11 +19,11 @@ from AEADPacketDynamic import AEADPacketDynamic, AEADFieldNames
 from AEADRequestPacket import AEADRequestPacket
 from DynamicCHLOPacket import DynamicCHLOPacket
 from FramesProcessor import FramesProcessor
-from FullCHLOPacket import FullCHLOPacket
+from FullCHLOPacket_litespeed import FullCHLOPacket
 from FullCHLOPacketNoPadding import FullCHLOPacketNoPadding
 from PacketNumberInstance import PacketNumberInstance
 from PingPacket import PingPacket
-from QUIC_43_localhost import QUICHeader
+from QUIC_43_litespeed import QUICHeader
 from RejectionPacket import RejectionPacket
 from SecondACKPacket import SecondACKPacket
 from caching.CacheInstance import CacheInstance
@@ -63,6 +62,11 @@ class Scapy:
         filename = 'log_{}.txt'.format(currenttime)
         #logging.basicConfig(filename=filename, level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
         self.logger = logging.getLogger(__name__)
+        conn_id = random.getrandbits(64)
+        self.logger.info("Changing CID from {}".format(SessionInstance.get_instance().connection_id))
+        SessionInstance.get_instance().connection_id_as_number = conn_id
+        SessionInstance.get_instance().connection_id = str(format(conn_id, 'x').zfill(16))  # Pad to 16 chars
+        SessionInstance.get_instance().destination_ip = "52.55.120.73"
 
         dhke.set_up_my_keys()
 
@@ -91,11 +95,12 @@ class Scapy:
             self.logger.info("To {}".format(SessionInstance.get_instance().connection_id))
 
     def send_chlo(self, only_reset):
-        self.reset(only_reset)
+        # self.reset(only_reset)
 
         chlo = QUICHeader()
         conf.L3socket = L3RawSocket
 
+        print('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
         chlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
 
         packet_number = PacketNumberInstance.get_instance().get_next_packet_number()
@@ -112,33 +117,32 @@ class Scapy:
         # chlo.setfieldval('Message_Authentication_Hash', mac_val)
 
         # Store chlo for the key derivation
-        SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(chlo, start=30, end=1054)
-
+        SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(chlo)
         # self.sniffer.add_observer(self)
 
 
         p = IP(dst=SessionInstance.get_instance().destination_ip) / UDP(dport=DPORT, sport=61250) / chlo
         ans, unans = sr(p,timeout=self.TIMEOUT)
 
-        packet = bytes(ans[0][1][UDP][Raw])
-        packet_type = packet[16+10: 16+10+3]
-        if packet_type ==b'REJ':
-            self.server_adress_token = packet[16*5+10: 16*5+10+60]
-            self.server_connection_id = packet[16*35+2: 16*35+2+16]
-            self.server_nonce = packet[16*9+6: 16*9+6+56]
-            SessionInstance.get_instance().server_nonce = self.server_nonce.hex()
-            SessionInstance.get_instance().scfg = packet[16*28+14: 16*28+14+175].hex()
-            print(SessionInstance.get_instance().scfg)
-        PROF = packet[16*12+14: 16*12+14+256]
-        SCFG = packet[16*28+14: 16*28+14+175]
-        RREJ = packet[16*39+13: 16*39+13+4]
-        STTL = packet[16*40+1: 16*40+1+8]
-        CRT = packet[16*40+9: 16*40+9+696]
-        PUBS = packet[16*36+6: 16*36+6+35]
+        try:
+            packet = bytes(ans[0][1][UDP][Raw])
+            packet_type = packet[16+8: 16+8+3]
+            # print(packet_type)
+            if packet_type ==b'REJ':
+                self.server_adress_token = packet[16*5+8: 16*5+8+60]
+                self.server_connection_id = packet[16*35+4: 16*35+4+16]
+                self.server_nonce = packet[16*9+4: 16*9+4+56]
+            PROF = packet[16*12+14: 16*12+14+256]
+            SCFG = packet[16*28+14: 16*28+14+175]
+            RREJ = packet[16*39+13: 16*39+13+4]
+            STTL = packet[16*40+1: 16*40+1+8]
+            CRT = packet[16*40+9: 16*40+9+696]
+            PUBS = packet[16*36+6: 16*36+6+35]
 
-        SessionInstance.get_instance().peer_public_value = bytes.fromhex(PUBS[3:].hex())
-        print(SessionInstance.get_instance().peer_public_value)
-        return packet
+            return packet
+        except:
+            return "ERROR"
+        # SessionInstance.get_instance().peer_public_value = bytes.fromhex(PUBS[3:].hex())
 
         # 20000079d756bbc5a0d69634141ba4327d547e91da42c84590855ea0308e0ca6baaa16 : value of REJ PUBS
 
@@ -162,7 +166,7 @@ class Scapy:
         randomString = bytes.hex(os.urandom(20))
 
         NONC = epoch + sORBIT + randomString
-        SessionInstance.get_instance().client_nonce = NONC
+
         fullchlo.setfieldval('NONC_Value',string_to_ascii(NONC))
 
         # Lets just create the public key for DHKE
@@ -180,10 +184,8 @@ class Scapy:
         message_authentication_hash = FNV128A().generate_hash(associated_data, body)
         fullchlo.setfieldval('Message_Authentication_Hash', string_to_ascii(message_authentication_hash))
 
-
-        SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(fullchlo, start=28, end=1052)
-
         conf.L3socket = L3RawSocket
+        SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(fullchlo, start=31)   # CHLO from the CHLO tag, which starts at offset 26 (22 header + frame type + stream id + offset)
 
         # print("Send full CHLO")
         try:
@@ -191,34 +193,17 @@ class Scapy:
 
             ans, unans = sr(p, timeout=self.TIMEOUT)
 
+            
             packet = bytes(ans[0][1][UDP][Raw])
-            div_nonce = packet[9:9+32]
-            print(div_nonce)
-            ciphertext = packet[16*2+10:]
-            print("Cipher : ",ciphertext.hex())
-            # print("key :",SessionInstance.get_instance().peer_public_value)
-            derived_key = dhke.generate_keys(SessionInstance.get_instance().peer_public_value, True)
-            diversed_key = dhke.diversify(derived_key['key2'], derived_key['iv2'], div_nonce)
-            print(diversed_key)
-            aesg_nonce = diversed_key['diversified_iv'] + bytes.fromhex("03") + bytes.fromhex("00"*7)
-            print(aesg_nonce)
-            decoder = AES.new(diversed_key['diversified_key'], AES.MODE_GCM, aesg_nonce)
-            # print(decoder)
-            plain_text = decoder.decrypt(ciphertext)
-            print("Plain : ",plain_text)
-
-            packet_type = packet[16+10: 16+10+3]
+            packet_type = packet[16+8: 16+8+3]
             if packet_type ==b'REJ':
-                self.server_adress_token = packet[16*5+10: 16*5+10+60]
-                self.server_connection_id = packet[16*35+2: 16*35+2+16]
-                self.server_nonce = packet[16*9+6: 16*9+6+56]
+                self.server_adress_token = packet[16*5+8: 16*5+8+60]
+                self.server_connection_id = packet[16*35+4: 16*35+4+16]
+                self.server_nonce = packet[16*9+4: 16*9+4+56]
 
             return packet
         except:
             return b"EXP"
-        
-
-
 
     def send_full_chlo_to_existing_connection(self):
 
@@ -230,18 +215,18 @@ class Scapy:
 
 
 
-        fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
-        # fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
-        fullchlo.setfieldval('STK_Value', string_to_ascii("4db852efc85461e7b51edf3dbb19883ac8fc87c8adec7978876b960f30b079753ded4cdae5a274309966cffb04b9b158b177a9a3ef711f2ed96de63f"))
-        fullchlo.setfieldval('SNO_Value', string_to_ascii("b9f4094620cf73adbe984450c3f40ad252839ab9e2852fc888014290a58e0d598ba33d29203fab9934ccbc31eef86b3080d8fa444e049dd7"))
-        fullchlo.setfieldval('SCID_Value', string_to_ascii("c24d7f4ed8ba037e77c7dbcd1ca6e9bf")) #incomplete
-
-
         # fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
-        # fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
-        # fullchlo.setfieldval('STK_Value', string_to_ascii(self.server_adress_token.hex()))
-        # # fullchlo.setfieldval('SNO_Value', string_to_ascii(self.server_nonce.hex()))
-        # fullchlo.setfieldval('SCID_Value', string_to_ascii(self.server_connection_id.hex())) #incomplete
+        # # fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
+        # fullchlo.setfieldval('STK_Value', string_to_ascii("4db852efc85461e7b51edf3dbb19883ac8fc87c8adec7978876b960f30b079753ded4cdae5a274309966cffb04b9b158b177a9a3ef711f2ed96de63f"))
+        # fullchlo.setfieldval('SNO_Value', string_to_ascii("b9f4094620cf73adbe984450c3f40ad252839ab9e2852fc888014290a58e0d598ba33d29203fab9934ccbc31eef86b3080d8fa444e049dd7"))
+        # fullchlo.setfieldval('SCID_Value', string_to_ascii("c24d7f4ed8ba037e77c7dbcd1ca6e9bf")) #incomplete
+
+
+        fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
+        fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
+        fullchlo.setfieldval('STK_Value', string_to_ascii(self.server_adress_token.hex()))
+        # fullchlo.setfieldval('SNO_Value', string_to_ascii(self.server_nonce.hex()))
+        fullchlo.setfieldval('SCID_Value', string_to_ascii(self.server_connection_id.hex())) #incomplete
 
 
         epochtime = str(hex(int(time.time())))
@@ -280,11 +265,11 @@ class Scapy:
             
             packet = bytes(ans[0][1][UDP][Raw])
 
-            # packet_type = packet[16+10: 16+10+3]
-            # if packet_type ==b'REJ':
-            #     self.server_adress_token = packet[16*5+10: 16*5+10+60]
-            #     self.server_connection_id = packet[16*35+2: 16*35+2+16]
-            #     self.server_nonce = packet[16*9+6: 16*9+6+56]
+            packet_type = packet[16+8: 16+8+3]
+            if packet_type ==b'REJ':
+                self.server_adress_token = packet[16*5+8: 16*5+8+60]
+                self.server_connection_id = packet[16*35+4: 16*35+4+16]
+                self.server_nonce = packet[16*9+4: 16*9+4+56]
 
             return packet
         except:
@@ -311,12 +296,14 @@ class Scapy:
 
 
 
-s = Scapy()
-s.send(SendInitialCHLOEvent())
-s.send(SendFullCHLOEvent())
-# time.sleep(60)
-# print(s.send(SendFullCHLOEvent()))
+# s = Scapy()
 # print(s.send(SendInitialCHLOEvent()))
+# # print(s.send(SendInitialCHLOEvent()))
+# # time.sleep(3)
+# print(s.send(SendFullCHLOEvent()))
+# # time.sleep(60)
+# # print(s.send(SendFullCHLOEvent()))
+# # print(s.send(SendInitialCHLOEvent()))
 # print(s.send(ZeroRTTCHLOEvent()))
 
 # try:

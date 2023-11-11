@@ -1,0 +1,11 @@
+digraph "Automata" {
+"0" [shape=doubleoctagon, style=filled, fillcolor=white, URL="0"];
+"1" [shape=ellipse, style=filled, fillcolor=white, URL="1"];
+"2" [shape=ellipse, style=filled, fillcolor=white, URL="2"];
+"0" -> "1" [fontsize=5, label="InitialCHLO / REJ", URL="t0"];
+"0" -> "0" [fontsize=5, label="FullCHLO / EXP", URL="t1"];
+"1" -> "1" [fontsize=5, label="InitialCHLO / ERROR", URL="t2"];
+"1" -> "2" [fontsize=5, label="FullCHLO / SHLO", URL="t3"];
+"2" -> "2" [fontsize=5, label="InitialCHLO / ERROR", URL="t4"];
+"2" -> "2" [fontsize=5, label="FullCHLO / ERROR", URL="t5"];
+}

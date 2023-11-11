@@ -1,7 +1,7 @@
-import time
-import binascii
-import os
+from crypto.dhke import dhke
 
-x = os.urandom(20)
-print(type(bytes.hex(x)))
+peer_value = bytes.fromhex('79d756bbc5a0d69634141ba4327d547e91da42c84590855ea0308e0ca6baaa16')
+print(len(peer_value))
+x = dhke.generate_keys(peer_value)
+print(x)
 

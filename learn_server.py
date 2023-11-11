@@ -29,6 +29,7 @@ def main():
     input_vocabulary = [
         "InitialCHLO",
         "FullCHLO",
+        # "ZERO-RTT",
         # "SendGETRequestEvent", 
         # "CloseConnectionEvent", 
         # "SendFullCHLOEvent", 
@@ -48,7 +49,7 @@ def main():
         
     dot_code = quicServer_state_machine.build_dot_code()
 
-    output_file = "quic_server_infer.dot"
+    output_file = "quic_server_infer_litespeed.dot"
 
     with open(output_file, "w") as fd:
         fd.write(dot_code)

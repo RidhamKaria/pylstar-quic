@@ -1,0 +1,8 @@
+digraph "Automata" {
+"0" [shape=doubleoctagon, style=filled, fillcolor=white, URL="0"];
+"1" [shape=ellipse, style=filled, fillcolor=white, URL="1"];
+"0" -> "1" [fontsize=5, label="InitialCHLO / REJ", URL="t0"];
+"0" -> "0" [fontsize=5, label="FullCHLO / EXP", URL="t1"];
+"1" -> "1" [fontsize=5, label="InitialCHLO / REJ", URL="t2"];
+"1" -> "1" [fontsize=5, label="FullCHLO / SHLO", URL="t3"];
+}

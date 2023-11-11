@@ -18,14 +18,17 @@ class dhke:
         Sets up my part for the DHKE
         :return:
         """
-        private_key = PrivateKey(secret=bytes.fromhex("78E0DACE61981ECEC3F7E164AC29407C7EE0AB515AB3F9B51C3E8B58050EE646"))
-        my_public_key = PublicKey(bytes.fromhex("96D49F2CE98F31F053DCB6DFE729669385E5FD99D5AA36615E1A9AD57C1B090C"))
+        private_key = PrivateKey(secret=bytes.fromhex("52066b56cd9006095d82210d21a8a6481dd8111ccd83e1852dee7bc9a4362f5c"))
+        # private_key = PrivateKey(secret=bytes.fromhex("78E0DACE61981ECEC3F7E164AC29407C7EE0AB515AB3F9B51C3E8B58050EE646"))
+        my_public_key = PublicKey(bytes.fromhex("9267f763f7aacc047ffad175142a0924bf0b64f38b2e7acf93517a1ba045cd75"))
+        # my_public_key = PublicKey(bytes.fromhex("96D49F2CE98F31F053DCB6DFE729669385E5FD99D5AA36615E1A9AD57C1B090C"))
         # private_key = PrivateKey()
         # my_public_key = PublicKey(os.urandom(32))
         SessionInstance.get_instance().public_value = my_public_key
         SessionInstance.get_instance().public_values_bytes = my_public_key.public.hex()
         # print("My public key {}".format(SessionInstance.get_instance().public_values_bytes))
         SessionInstance.get_instance().private_value = private_key
+        # print("private key:",private_key.hex())
 
     @staticmethod
     def generate_keys(peer_public_value: bytes, forward_secure=False, logger=None):
@@ -39,22 +42,23 @@ class dhke:
         :return:
         """
         # 1. Load my key
-        private_key = SessionInstance.get_instance().private_value
+        private_key = PrivateKey(secret=bytes.fromhex("52066b56cd9006095d82210d21a8a6481dd8111ccd83e1852dee7bc9a4362f5c"))
+        # private_key = PrivateKey(secret=bytes.fromhex("78E0DACE61981ECEC3F7E164AC29407C7EE0AB515AB3F9B51C3E8B58050EE646"))
 
         # 2. compute the shared secret
         if len(peer_public_value) != 32:
             raise Exception("Invalid length of peer public value, should be 32 bytes received {} bytes".format(len(peer_public_value)))
 
         shared_key = private_key.do_exchange(PublicKey(peer_public_value))
-
+        print("shared key",shared_key)
         # 3. Apply the kdf
         info = dhke.generate_info(forward_secure)
-        salt = bytes.fromhex("5ac349e90091b5556f1a3c52eb57f92c12640e876e26ab2601c02b2a32f54830") # Fixed client nonce
-        # print("Forward secure? {}".format(forward_secure))
+        salt = bytes.fromhex(SessionInstance.get_instance().client_nonce) # Fixed client nonce
+        print("Forward secure? {}".format(forward_secure))
         # print("Zero rtt mode? {}".format(SessionInstance.get_instance().zero_rtt))
         # print("Using dynamic nonce? {}".format(SessionInstance.get_instance().zero_rtt or forward_secure))
         if forward_secure or SessionInstance.get_instance().zero_rtt:
-            salt += bytes.fromhex(SessionInstance.get_instance().server_nonce)  # Appended with dynamic server nonce
+            salt = salt + bytes.fromhex(SessionInstance.get_instance().server_nonce)  # Appended with dynamic server nonce
             # print("Received server nonce {}".format(SessionInstance.get_instance().server_nonce))
         else:
             salt += bytes.fromhex("e4d458e2594b930f6d4f77711215adf9ebe99096c479dbf765f41d28646c4b87a0ec735e63cc4f19b9207d369e36968b2b2071ed") # Is it fixed?
@@ -72,7 +76,6 @@ class dhke:
         # print(info.hex())
 
         print("Shared key {}".format(shared_key.hex()))
-
         derived_shared_key = dhke.perform_hkdf(salt, shared_key, info, forward_secure)
 
         print("Derived shared key {}".format({k: v.hex() for k, v in derived_shared_key.items()}))
@@ -143,7 +146,7 @@ class dhke:
             info += "QUIC key expansion".encode('utf-8')
         info += b"\x00"
         try:
-            info += bytes.fromhex(SessionInstance.get_instance().connection_id)
+            info += bytes.fromhex(str(SessionInstance.get_instance().connection_id))
         except ValueError:
             print("Error in connection id? {}".format(SessionInstance.get_instance().connection_id))
             return
