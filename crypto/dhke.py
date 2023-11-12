@@ -18,17 +18,17 @@ class dhke:
         Sets up my part for the DHKE
         :return:
         """
-        private_key = PrivateKey(secret=bytes.fromhex("52066b56cd9006095d82210d21a8a6481dd8111ccd83e1852dee7bc9a4362f5c"))
+        # private_key = PrivateKey(secret=bytes.fromhex("52066b56cd9006095d82210d21a8a6481dd8111ccd83e1852dee7bc9a4362f5c"))
         # private_key = PrivateKey(secret=bytes.fromhex("78E0DACE61981ECEC3F7E164AC29407C7EE0AB515AB3F9B51C3E8B58050EE646"))
-        my_public_key = PublicKey(bytes.fromhex("9267f763f7aacc047ffad175142a0924bf0b64f38b2e7acf93517a1ba045cd75"))
+        # my_public_key = PublicKey(bytes.fromhex("9267f763f7aacc047ffad175142a0924bf0b64f38b2e7acf93517a1ba045cd75"))
         # my_public_key = PublicKey(bytes.fromhex("96D49F2CE98F31F053DCB6DFE729669385E5FD99D5AA36615E1A9AD57C1B090C"))
-        # private_key = PrivateKey()
-        # my_public_key = PublicKey(os.urandom(32))
+        private_key = PrivateKey()
+        my_public_key = PublicKey((private_key.get_public()).public)
         SessionInstance.get_instance().public_value = my_public_key
         SessionInstance.get_instance().public_values_bytes = my_public_key.public.hex()
-        # print("My public key {}".format(SessionInstance.get_instance().public_values_bytes))
-        SessionInstance.get_instance().private_value = private_key
-        # print("private key:",private_key.hex())
+        print("My public key {}".format(SessionInstance.get_instance().public_values_bytes))
+        SessionInstance.get_instance().private_value = private_key.private
+        print("private key:",private_key)
 
     @staticmethod
     def generate_keys(peer_public_value: bytes, forward_secure=False, logger=None):
@@ -42,7 +42,7 @@ class dhke:
         :return:
         """
         # 1. Load my key
-        private_key = PrivateKey(secret=bytes.fromhex("52066b56cd9006095d82210d21a8a6481dd8111ccd83e1852dee7bc9a4362f5c"))
+        private_key = PrivateKey(secret=SessionInstance.get_instance().private_value)
         # private_key = PrivateKey(secret=bytes.fromhex("78E0DACE61981ECEC3F7E164AC29407C7EE0AB515AB3F9B51C3E8B58050EE646"))
 
         # 2. compute the shared secret
@@ -50,9 +50,11 @@ class dhke:
             raise Exception("Invalid length of peer public value, should be 32 bytes received {} bytes".format(len(peer_public_value)))
 
         shared_key = private_key.do_exchange(PublicKey(peer_public_value))
-        print("shared key",shared_key)
+        print("s pub key",peer_public_value.hex())
+        print("shared key",shared_key.hex())
         # 3. Apply the kdf
         info = dhke.generate_info(forward_secure)
+        print("info :", info.hex())
         salt = bytes.fromhex(SessionInstance.get_instance().client_nonce) # Fixed client nonce
         print("Forward secure? {}".format(forward_secure))
         # print("Zero rtt mode? {}".format(SessionInstance.get_instance().zero_rtt))
@@ -60,8 +62,10 @@ class dhke:
         if forward_secure or SessionInstance.get_instance().zero_rtt:
             salt = salt + bytes.fromhex(SessionInstance.get_instance().server_nonce)  # Appended with dynamic server nonce
             # print("Received server nonce {}".format(SessionInstance.get_instance().server_nonce))
-        else:
-            salt += bytes.fromhex("e4d458e2594b930f6d4f77711215adf9ebe99096c479dbf765f41d28646c4b87a0ec735e63cc4f19b9207d369e36968b2b2071ed") # Is it fixed?
+        else:            
+            salt = salt + bytes.fromhex(SessionInstance.get_instance().server_nonce)  # Appended with dynamic server nonce
+            # salt += bytes.fromhex("e4d458e2594b930f6d4f77711215adf9ebe99096c479dbf765f41d28646c4b87a0ec735e63cc4f19b9207d369e36968b2b2071ed") # Is it fixed?
+        print("salt:", salt.hex())
 
         # print("Connection ID")
         # print(SessionInstance.get_instance().connection_id)
@@ -102,13 +106,13 @@ class dhke:
         }
 
         # if it is not forward secure we need to diversify the keys
-        if not forward_secure:
-            try:
-                diversified = dhke.diversify(keys['key2'], keys['iv2'], bytes.fromhex(SessionInstance.get_instance().div_nonce))
-                keys['key2'] = diversified['diversified_key']
-                keys['iv2'] = diversified['diversified_iv']
-            except ValueError:
-                print("Error in div nonce {}".format(SessionInstance.get_instance().div_nonce))
+        # if not forward_secure:
+        #     try:
+        #         diversified = dhke.diversify(keys['key2'], keys['iv2'], bytes.fromhex(SessionInstance.get_instance().div_nonce))
+        #         keys['key2'] = diversified['diversified_key']
+        #         keys['iv2'] = diversified['diversified_iv']
+        #     except ValueError:
+        #         print("Error in div nonce {}".format(SessionInstance.get_instance().div_nonce))
 
         return keys
 

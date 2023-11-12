@@ -112,7 +112,7 @@ class Scapy:
         # chlo.setfieldval('Message_Authentication_Hash', mac_val)
 
         # Store chlo for the key derivation
-        SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(chlo, start=30, end=1054)
+        # SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(chlo, start=30, end=1054)
 
         # self.sniffer.add_observer(self)
 
@@ -128,7 +128,8 @@ class Scapy:
             self.server_nonce = packet[16*9+6: 16*9+6+56]
             SessionInstance.get_instance().server_nonce = self.server_nonce.hex()
             SessionInstance.get_instance().scfg = packet[16*28+14: 16*28+14+175].hex()
-            print(SessionInstance.get_instance().scfg)
+            # SessionInstance.get_instance().cert = packet[16*40+9: 16*40+9+696].hex()
+            # print(SessionInstance.get_instance().scfg)
         PROF = packet[16*12+14: 16*12+14+256]
         SCFG = packet[16*28+14: 16*28+14+175]
         RREJ = packet[16*39+13: 16*39+13+4]
@@ -137,7 +138,7 @@ class Scapy:
         PUBS = packet[16*36+6: 16*36+6+35]
 
         SessionInstance.get_instance().peer_public_value = bytes.fromhex(PUBS[3:].hex())
-        print(SessionInstance.get_instance().peer_public_value)
+        # print(SessionInstance.get_instance().peer_public_value)
         return packet
 
         # 20000079d756bbc5a0d69634141ba4327d547e91da42c84590855ea0308e0ca6baaa16 : value of REJ PUBS
@@ -193,15 +194,16 @@ class Scapy:
 
             packet = bytes(ans[0][1][UDP][Raw])
             div_nonce = packet[9:9+32]
-            print(div_nonce)
-            ciphertext = packet[16*2+10:]
-            print("Cipher : ",ciphertext.hex())
+            packet_number = packet[41]
+            print("\nnonce :",div_nonce.hex())
+            ciphertext = packet[42:]
             # print("key :",SessionInstance.get_instance().peer_public_value)
-            derived_key = dhke.generate_keys(SessionInstance.get_instance().peer_public_value, True)
+            derived_key = dhke.generate_keys(SessionInstance.get_instance().peer_public_value, False)
+            print("\nCipher : ",ciphertext.hex())
             diversed_key = dhke.diversify(derived_key['key2'], derived_key['iv2'], div_nonce)
-            print(diversed_key)
-            aesg_nonce = diversed_key['diversified_iv'] + bytes.fromhex("03") + bytes.fromhex("00"*7)
-            print(aesg_nonce)
+            print("\nCipher : ",diversed_key)
+            aesg_nonce = diversed_key['diversified_iv'] + bytes.fromhex(str("%02x" % packet_number)) + bytes.fromhex("000000") + bytes.fromhex("00000000")
+            print("\nCipher : ",aesg_nonce)
             decoder = AES.new(diversed_key['diversified_key'], AES.MODE_GCM, aesg_nonce)
             # print(decoder)
             plain_text = decoder.decrypt(ciphertext)
