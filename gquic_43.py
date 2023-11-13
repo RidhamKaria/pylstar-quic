@@ -108,13 +108,9 @@ class Scapy:
         # print(message_authentication_hash)
         chlo.setfieldval('Message_Authentication_Hash', string_to_ascii(message_authentication_hash))
         
-        # mac_val = b'\xf3\x3e\x04\xda\x45\xca\x71\x9c\x49\x9c\xf6\x58'
-        # chlo.setfieldval('Message_Authentication_Hash', mac_val)
-
         # Store chlo for the key derivation
-        # SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(chlo, start=30, end=1054)
+        SessionInstance.get_instance().chlo = extract_from_packet_as_bytestring(chlo, start=30, end=1054)
 
-        # self.sniffer.add_observer(self)
 
 
         p = IP(dst=SessionInstance.get_instance().destination_ip) / UDP(dport=DPORT, sport=61250) / chlo
@@ -129,7 +125,9 @@ class Scapy:
             SessionInstance.get_instance().server_nonce = self.server_nonce.hex()
             SessionInstance.get_instance().scfg = packet[16*28+14: 16*28+14+175].hex()
             # SessionInstance.get_instance().cert = packet[16*40+9: 16*40+9+696].hex()
-            # print(SessionInstance.get_instance().scfg)
+            print("STK:", self.server_adress_token)
+            print("SCID :",self.server_connection_id)
+            print("SN :",self.server_nonce)
         PROF = packet[16*12+14: 16*12+14+256]
         SCFG = packet[16*28+14: 16*28+14+175]
         RREJ = packet[16*39+13: 16*39+13+4]
@@ -138,7 +136,6 @@ class Scapy:
         PUBS = packet[16*36+6: 16*36+6+35]
 
         SessionInstance.get_instance().peer_public_value = bytes.fromhex(PUBS[3:].hex())
-        # print(SessionInstance.get_instance().peer_public_value)
         return packet
 
         # 20000079d756bbc5a0d69634141ba4327d547e91da42c84590855ea0308e0ca6baaa16 : value of REJ PUBS
@@ -151,10 +148,9 @@ class Scapy:
 
 
         fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
-        fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
         fullchlo.setfieldval('STK_Value', string_to_ascii(self.server_adress_token.hex()))
         fullchlo.setfieldval('SNO_Value', string_to_ascii(self.server_nonce.hex()))
-        fullchlo.setfieldval('SCID_Value', string_to_ascii(self.server_connection_id.hex())) #incomplete
+        fullchlo.setfieldval('SCID_Value', string_to_ascii(self.server_connection_id.hex())) 
 
 
         epochtime = str(hex(int(time.time())))
@@ -195,19 +191,13 @@ class Scapy:
             packet = bytes(ans[0][1][UDP][Raw])
             div_nonce = packet[9:9+32]
             packet_number = packet[41]
-            print("\nnonce :",div_nonce.hex())
             ciphertext = packet[42:]
-            # print("key :",SessionInstance.get_instance().peer_public_value)
             derived_key = dhke.generate_keys(SessionInstance.get_instance().peer_public_value, False)
-            print("\nCipher : ",ciphertext.hex())
             diversed_key = dhke.diversify(derived_key['key2'], derived_key['iv2'], div_nonce)
-            print("\nCipher : ",diversed_key)
             aesg_nonce = diversed_key['diversified_iv'] + bytes.fromhex(str("%02x" % packet_number)) + bytes.fromhex("000000") + bytes.fromhex("00000000")
-            print("\nCipher : ",aesg_nonce)
             decoder = AES.new(diversed_key['diversified_key'], AES.MODE_GCM, aesg_nonce)
-            # print(decoder)
             plain_text = decoder.decrypt(ciphertext)
-            print("Plain : ",plain_text)
+            print("Plain : ",plain_text[6:10])
 
             packet_type = packet[16+10: 16+10+3]
             if packet_type ==b'REJ':
@@ -233,17 +223,11 @@ class Scapy:
 
 
         fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
-        # fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
-        fullchlo.setfieldval('STK_Value', string_to_ascii("4db852efc85461e7b51edf3dbb19883ac8fc87c8adec7978876b960f30b079753ded4cdae5a274309966cffb04b9b158b177a9a3ef711f2ed96de63f"))
-        fullchlo.setfieldval('SNO_Value', string_to_ascii("b9f4094620cf73adbe984450c3f40ad252839ab9e2852fc888014290a58e0d598ba33d29203fab9934ccbc31eef86b3080d8fa444e049dd7"))
-        fullchlo.setfieldval('SCID_Value', string_to_ascii("c24d7f4ed8ba037e77c7dbcd1ca6e9bf")) #incomplete
 
-
-        # fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
-        # fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
-        # fullchlo.setfieldval('STK_Value', string_to_ascii(self.server_adress_token.hex()))
-        # # fullchlo.setfieldval('SNO_Value', string_to_ascii(self.server_nonce.hex()))
-        # fullchlo.setfieldval('SCID_Value', string_to_ascii(self.server_connection_id.hex())) #incomplete
+        fullchlo.setfieldval('CID', string_to_ascii(SessionInstance.get_instance().connection_id))
+        fullchlo.setfieldval('SCID_Value', SessionInstance.get_instance().server_config_id)
+        fullchlo.setfieldval('STK_Value', string_to_ascii(self.server_adress_token.hex()))
+        fullchlo.setfieldval('SNO_Value', string_to_ascii(self.server_nonce.hex()))
 
 
         epochtime = str(hex(int(time.time())))

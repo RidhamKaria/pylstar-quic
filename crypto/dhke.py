@@ -26,9 +26,9 @@ class dhke:
         my_public_key = PublicKey((private_key.get_public()).public)
         SessionInstance.get_instance().public_value = my_public_key
         SessionInstance.get_instance().public_values_bytes = my_public_key.public.hex()
-        print("My public key {}".format(SessionInstance.get_instance().public_values_bytes))
+        # print("My public key {}".format(SessionInstance.get_instance().public_values_bytes))
         SessionInstance.get_instance().private_value = private_key.private
-        print("private key:",private_key)
+        # print("private key:",private_key)
 
     @staticmethod
     def generate_keys(peer_public_value: bytes, forward_secure=False, logger=None):
@@ -50,13 +50,10 @@ class dhke:
             raise Exception("Invalid length of peer public value, should be 32 bytes received {} bytes".format(len(peer_public_value)))
 
         shared_key = private_key.do_exchange(PublicKey(peer_public_value))
-        print("s pub key",peer_public_value.hex())
-        print("shared key",shared_key.hex())
         # 3. Apply the kdf
         info = dhke.generate_info(forward_secure)
-        print("info :", info.hex())
         salt = bytes.fromhex(SessionInstance.get_instance().client_nonce) # Fixed client nonce
-        print("Forward secure? {}".format(forward_secure))
+        # print("Forward secure? {}".format(forward_secure))
         # print("Zero rtt mode? {}".format(SessionInstance.get_instance().zero_rtt))
         # print("Using dynamic nonce? {}".format(SessionInstance.get_instance().zero_rtt or forward_secure))
         if forward_secure or SessionInstance.get_instance().zero_rtt:
@@ -65,7 +62,7 @@ class dhke:
         else:            
             salt = salt + bytes.fromhex(SessionInstance.get_instance().server_nonce)  # Appended with dynamic server nonce
             # salt += bytes.fromhex("e4d458e2594b930f6d4f77711215adf9ebe99096c479dbf765f41d28646c4b87a0ec735e63cc4f19b9207d369e36968b2b2071ed") # Is it fixed?
-        print("salt:", salt.hex())
+        # print("salt:", salt.hex())
 
         # print("Connection ID")
         # print(SessionInstance.get_instance().connection_id)
@@ -79,10 +76,10 @@ class dhke:
         # print(">>>> Info <<<<")
         # print(info.hex())
 
-        print("Shared key {}".format(shared_key.hex()))
+        # print("Shared key {}".format(shared_key.hex()))
         derived_shared_key = dhke.perform_hkdf(salt, shared_key, info, forward_secure)
 
-        print("Derived shared key {}".format({k: v.hex() for k, v in derived_shared_key.items()}))
+        # print("Derived shared key {}".format({k: v.hex() for k, v in derived_shared_key.items()}))
 
         SessionInstance.get_instance().keys = derived_shared_key
         return derived_shared_key
